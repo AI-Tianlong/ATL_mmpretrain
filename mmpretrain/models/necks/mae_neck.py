@@ -61,17 +61,19 @@ class MAEPretrainDecoder(BaseModule):
         self.num_patches = num_patches
 
         # used to convert the dim of features from encoder to the dim
-        # compatible with that of decoder
+        # compatible with that of decoder  (1,50,768)-->(1,50,512)
         self.decoder_embed = nn.Linear(embed_dim, decoder_embed_dim, bias=True)
-
+        # (1,1,512)
         self.mask_token = nn.Parameter(torch.zeros(1, 1, decoder_embed_dim))
 
         # create new position embedding, different from that in encoder
         # and is not learnable
+        # 不可学习的参数(1, 196+1, 512)
         self.decoder_pos_embed = nn.Parameter(
             torch.zeros(1, self.num_patches + 1, decoder_embed_dim),
             requires_grad=False)
 
+        # decoder layers, 8个decoder block
         self.decoder_blocks = nn.ModuleList([
             TransformerEncoderLayer(
                 decoder_embed_dim,
@@ -81,14 +83,15 @@ class MAEPretrainDecoder(BaseModule):
                 norm_cfg=norm_cfg) for _ in range(decoder_depth)
         ])
 
+        #()
         self.decoder_norm_name, decoder_norm = build_norm_layer(
             norm_cfg, decoder_embed_dim, postfix=1)
         self.add_module(self.decoder_norm_name, decoder_norm)
 
         # Used to map features to pixels
-        if predict_feature_dim is None:
+        if predict_feature_dim is None:  # 16*16*3 = 768
             predict_feature_dim = patch_size**2 * in_chans
-        self.decoder_pred = nn.Linear(
+        self.decoder_pred = nn.Linear(  # (512)--->(768)
             decoder_embed_dim, predict_feature_dim, bias=True)
 
     def init_weights(self) -> None:
@@ -118,7 +121,7 @@ class MAEPretrainDecoder(BaseModule):
 
         Args:
             x (torch.Tensor): hidden features, which is of shape
-                    B x (L * mask_ratio) x C.
+                    B x (L * mask_ratio) x C.  (1,40,3) ？
             ids_restore (torch.Tensor): ids to restore original image.
 
         Returns:
@@ -126,19 +129,28 @@ class MAEPretrainDecoder(BaseModule):
             shape B x (num_patches) x C.
         """
         # embed tokens
-        x = self.decoder_embed(x)
+        # 这里可以打印一下
+        x = self.decoder_embed(x) #(1,50,768)-->(1,50,512)
 
         # append mask tokens to sequence
+        # (1,1,512)-->(1,147,512)  # 196+1-50=147个mask token
+
         mask_tokens = self.mask_token.repeat(
             x.shape[0], ids_restore.shape[1] + 1 - x.shape[1], 1)
+        # (1,49,512)+(1,147,512) = (1,196,512) -->恢复成了原来的196个patch
         x_ = torch.cat([x[:, 1:, :], mask_tokens], dim=1)
+        # 把 196个 patch 弄回原来打乱前的顺序 (1,196,512)
         x_ = torch.gather(
             x_,
             dim=1,
             index=ids_restore.unsqueeze(-1).repeat(1, 1, x.shape[2]))
+        # (1,1,512)+(1,196,512) = (1,197,512)
         x = torch.cat([x[:, :1, :], x_], dim=1)
 
+        
         # add pos embed
+        # token embed + pos embed
+        # (1, 196+1, 512) + (1, 196+1, 512) = (1, 196+1, 512)，这里的pos_embed是不可学习的，197是因为有个cls_token
         x = x + self.decoder_pos_embed
 
         # apply Transformer blocks
@@ -147,6 +159,8 @@ class MAEPretrainDecoder(BaseModule):
         x = self.decoder_norm(x)
 
         # predictor projection
+
+        # (1,197,512)--->(1,197,768)
         x = self.decoder_pred(x)
 
         # remove cls token

@@ -33,18 +33,21 @@ class MAEPretrainHead(BaseModule):
 
         Args:
             imgs (torch.Tensor): A batch of images. The shape should
-                be :math:`(B, C, H, W)`.
+                be :math:`(B, C, H, W)`.  # (1,3,224,224)
 
         Returns:
             torch.Tensor: Patchified images. The shape is
             :math:`(B, L, \text{patch_size}^2 \times C)`.
         """
-        p = self.patch_size
+        p = self.patch_size # 16  (1,3,224,224) 224/16=14···0 可以整除
         assert imgs.shape[2] == imgs.shape[3] and imgs.shape[2] % p == 0
-
+        # h = w =224 / 16 = 14
         h = w = imgs.shape[2] // p
+        # (1,3,224,224) -> (1,3,14,16,14,16)
         x = imgs.reshape(shape=(imgs.shape[0], self.in_channels, h, p, w, p))
+        # (1,3,14,16,14,16)-->(1,14,14,16,16,3)
         x = torch.einsum('nchpwq->nhwpqc', x)
+        # (1,14,14,16,16,3)-->(1,14*14,16*16*3)(1,196,768)
         x = x.reshape(shape=(imgs.shape[0], h * w, p**2 * self.in_channels))
         return x
 
@@ -53,17 +56,21 @@ class MAEPretrainHead(BaseModule):
 
         Args:
             x (torch.Tensor): The shape is
-                :math:`(B, L, \text{patch_size}^2 \times C)`.
+                :math:`(B, L, \text{patch_size}^2 \times C)`. (1, 196, 768)
 
         Returns:
             torch.Tensor: The shape is :math:`(B, C, H, W)`.
         """
+        # 16
         p = self.patch_size
+        # h = w = 14
         h = w = int(x.shape[1]**.5)
         assert h * w == x.shape[1]
-
+        # (1,196,768)-->(1,14,14,16,16,3)
         x = x.reshape(shape=(x.shape[0], h, w, p, p, self.in_channels))
+        # (1,14,14,16,16,3)-->(1,3,14,16,14,16)
         x = torch.einsum('nhwpqc->nchpwq', x)
+        # (1,3,14,16,14,16)-->(1,3,224,224)
         imgs = x.reshape(shape=(x.shape[0], self.in_channels, h * p, h * p))
         return imgs
 
@@ -72,13 +79,16 @@ class MAEPretrainHead(BaseModule):
 
         In addition to splitting images into tokens, this module will also
         normalize the image according to ``norm_pix``.
+        # 将对图像规范化
 
         Args:
-            target (torch.Tensor): Image with the shape of B x C x H x W
-
+            target (torch.Tensor): Image with the shape of B x C x H x W (1,3,224,224)
+                                                        
         Returns:
-            torch.Tensor: Tokenized images with the shape of B x L x C
+            torch.Tensor: Tokenized images with the shape of B x L x C (1,196,768)
         """
+
+        #  (1,3,224,224) --> (1,196,768)
         target = self.patchify(target)
         if self.norm_pix:
             # normalize the target image
@@ -100,7 +110,9 @@ class MAEPretrainHead(BaseModule):
         Returns:
             torch.Tensor: The reconstruction loss.
         """
+        # (1,3,224,224) -> 归一化的(1,196,768)
         target = self.construct_target(target)
+        # loss = pred - target 除了mask计算loss. MAE的forward传进来的
         loss = self.loss_module(pred, target, mask)
 
         return loss

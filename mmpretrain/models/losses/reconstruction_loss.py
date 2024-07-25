@@ -52,6 +52,7 @@ class PixelReconstructionLoss(BaseModule):
         Returns:
             torch.Tensor: The reconstruction loss.
         """
+        # Pred 和 target 计算均方误差 loss
         loss = self.penalty(pred, target)
 
         # if the dim of the loss is 3, take the average of the loss
@@ -61,7 +62,10 @@ class PixelReconstructionLoss(BaseModule):
 
         if mask is None:
             loss = loss.mean()
+        # loss的 尺寸：(1, 196, 768) * (1,196)
+        # 计算 loss * mask, 没有掩码掉的地方，loss为0
+        # 掩码掉的地方 loss 为 1
         else:
             loss = (loss * mask).sum() / mask.sum() / self.channel
-
+        
         return loss

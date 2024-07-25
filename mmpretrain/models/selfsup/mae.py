@@ -58,6 +58,7 @@ class MAEViT(VisionTransformer):
     def __init__(self,
                  arch: Union[str, dict] = 'b',
                  img_size: int = 224,
+                 in_channels: int = 3,
                  patch_size: int = 16,
                  out_indices: Union[Sequence, int] = -1,
                  drop_rate: float = 0,
@@ -73,6 +74,7 @@ class MAEViT(VisionTransformer):
         super().__init__(
             arch=arch,
             img_size=img_size,
+            in_channels=in_channels,
             patch_size=patch_size,
             out_indices=out_indices,
             drop_rate=drop_rate,
@@ -105,7 +107,8 @@ class MAEViT(VisionTransformer):
 
         torch.nn.init.normal_(self.cls_token, std=.02)
 
-    def random_masking(
+    # 随机 mask 
+    def random_masking(   
         self,
         x: torch.Tensor,
         mask_ratio: float = 0.75
@@ -126,33 +129,48 @@ class MAEViT(VisionTransformer):
             - ``mask`` (torch.Tensor): mask used to mask image.
             - ``ids_restore`` (torch.Tensor): ids to restore original image.
         """
-        N, L, D = x.shape  # batch, length, dim
-        len_keep = int(L * (1 - mask_ratio))
-
-        noise = torch.rand(N, L, device=x.device)  # noise in [0, 1]
+        N, L, D = x.shape  # batch, length, dim (1,3,224,224) -> (1,768,14,14) -> (1,196,768)
+        len_keep = int(L * (1 - mask_ratio))   # 保留的 patch 数量  196*0.25=49
+        
+        # 一个随机数 对应一个patch
+        noise = torch.rand(N, L, device=x.device)  # noise in [0, 1]  # 生成一个 （batch,196）的随机矩阵，每个值[0,1]
 
         # sort noise for each sample
-        ids_shuffle = torch.argsort(
+        # (batch=1, 196)
+        ids_shuffle = torch.argsort(     # (batch,196), 每一行代表一个batch，每一行的值是196个noise从小到大的索引
             noise, dim=1)  # ascend: small is keep, large is remove
-        ids_restore = torch.argsort(ids_shuffle, dim=1)
+        # (batch=1, 196)
+        ids_restore = torch.argsort(ids_shuffle, dim=1) # 获取排序后每个元素在原始未排序数组中的位置
 
         # keep the first subset
+        # 挑前49个patch
+        # (batch=1, 49)
         ids_keep = ids_shuffle[:, :len_keep]
+        
+        # 保留前49个patch  
+        # (batch=1, 49, 768), 保留前49哥 patch
         x_masked = torch.gather(
             x, dim=1, index=ids_keep.unsqueeze(-1).repeat(1, 1, D))
 
         # generate the binary mask: 0 is keep, 1 is remove
+        #(1,196)
         mask = torch.ones([N, L], device=x.device)
-        mask[:, :len_keep] = 0
+        mask[:, :len_keep] = 0 # mask的前49个patch为0，后147个patch为1
         # unshuffle to get the binary mask
+        # 留下的 patch 的原始位置，第0个掩或不掩
         mask = torch.gather(mask, dim=1, index=ids_restore)
 
+        # return 没有mask的49个 patch的值， 
+        # mask用于恢复原始顺序的索引,哪个掩了 哪个没码，
+        # ids_restore用于恢复原始顺序
+
+        # (1,49,768)   (1,196) (1,196,768)
         return x_masked, mask, ids_restore
 
     def forward(
         self,
         x: torch.Tensor,
-        mask: Optional[bool] = True
+        mask: Optional[bool] = True 
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Generate features for masked images.
 
@@ -179,29 +197,39 @@ class MAEViT(VisionTransformer):
             - ``mask`` (torch.Tensor): mask used to mask image.
             - ``ids_restore`` (torch.Tensor): ids to restore original image.
         """
+        # 那就是执行 ViT的 forward
         if mask is None or False:
             return super().forward(x)
 
+        # B x C x H x W.  (1, 3, 224, 224)
         else:
             B = x.shape[0]
-            x = self.patch_embed(x)[0]
-            # add pos embed w/o cls token
+            x = self.patch_embed(x)[0]  #    (1, 196, 768), 
+            # add pos embed w/o cls token  
+            # # 然后加上位置编码，这里的self.pos_embed在初始化时加上了cls_token,因此这里取[:, 1:, :]。
+            # pathch embed + pos embed，对应图中的分块+紫块
             x = x + self.pos_embed[:, 1:, :]
 
             # masking: length -> length * mask_ratio
+            #(1,49,768) (1,196),(1,196,768)
             x, mask, ids_restore = self.random_masking(x, self.mask_ratio)
 
             # append cls token
+            # (B,C)     (1,1,768)              (1,1+196,768)
             cls_token = self.cls_token + self.pos_embed[:, :1, :]
+            # (1,1,768)--->(B,1,768)
             cls_tokens = cls_token.expand(B, -1, -1)
+            # (1,1,768)+(1,49,768)-->(1,50,768)
             x = torch.cat((cls_tokens, x), dim=1)
-
+            
+            # 过一堆 bolck
             for _, layer in enumerate(self.layers):
                 x = layer(x)
             # Use final norm
             x = self.norm1(x)
-
-            return (x, mask, ids_restore)
+            # 过完block的x，mask掩码位置，用于恢复原始顺序的索引
+            # (1,50,768) (1,196) (1,196,768)
+            return (x, mask, ids_restore) 
 
 
 @MODELS.register_module()
@@ -211,10 +239,12 @@ class MAE(BaseSelfSupervisor):
     Implementation of `Masked Autoencoders Are Scalable Vision Learners
     <https://arxiv.org/abs/2111.06377>`_.
     """
-
+    # 重写了 extract_feat
     def extract_feat(self, inputs: torch.Tensor):
         return self.backbone(inputs, mask=None)
+    
 
+    # 重写了 loss 的计算
     def loss(self, inputs: torch.Tensor, data_samples: List[DataSample],
              **kwargs) -> Dict[str, torch.Tensor]:
         """The forward function in training.
@@ -229,7 +259,9 @@ class MAE(BaseSelfSupervisor):
         """
         # ids_restore: the same as that in original repo, which is used
         # to recover the original order of tokens in decoder.
+        #(1,50,768) (1,196) (1,196,768)
         latent, mask, ids_restore = self.backbone(inputs)
+        # (1,196,768)
         pred = self.neck(latent, ids_restore)
         loss = self.head.loss(pred, inputs, mask)
         losses = dict(loss=loss)
@@ -237,8 +269,11 @@ class MAE(BaseSelfSupervisor):
 
 
 @MODELS.register_module()
-class MAEHiViT(HiViT):
+class MAEHiViT(HiViT):    
     """HiViT for MAE pre-training.
+
+    # HiViT: 2*(MLP->MLP) ---> 2*(MLP->MLP) ---> 20*(Global_Att->MLP)
+    # ViT:   --------------------------> 12*(Global_Att->MLP)
 
     A PyTorch implement of: `HiViT: A Simple and More Efficient Design
     of Hierarchical Vision Transformer <https://arxiv.org/abs/2205.14949>`_.
@@ -275,6 +310,7 @@ class MAEHiViT(HiViT):
                  img_size: int = 224,
                  patch_size: int = 16,
                  inner_patches: int = 4,
+                 in_chans=10,
                  out_indices: Union[list, int] = [23],
                  drop_rate: float = 0.0,
                  drop_path_rate: float = 0.0,
@@ -289,6 +325,7 @@ class MAEHiViT(HiViT):
             img_size=img_size,
             patch_size=patch_size,
             inner_patches=inner_patches,
+            in_chans = in_chans,
             out_indices=out_indices,
             drop_rate=drop_rate,
             drop_path_rate=drop_path_rate,

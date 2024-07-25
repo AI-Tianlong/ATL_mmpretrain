@@ -3,8 +3,8 @@
 from mmengine.config import read_base
 
 with read_base():
-    from .._base_.models.mae_vit_base_p16 import *
-    from .._base_.datasets.imagenet_bs512_mae import *
+    from .._base_.models.atl_s2_mae_vit_base_p16 import *
+    from .._base_.datasets.atl_s2_10band_mae import *
     from .._base_.default_runtime import *
 
 from mmengine.hooks.checkpoint_hook import CheckpointHook
@@ -13,13 +13,16 @@ from mmengine.optim.scheduler.lr_scheduler import CosineAnnealingLR, LinearLR
 from mmengine.runner.loops import EpochBasedTrainLoop
 from torch.optim.adamw import AdamW
 
+
+# backbone 是 encoder, neck是decoder 在head中计算重建损失
+
 # optimizer wrapper
 optim_wrapper = dict(
     type=AmpOptimWrapper,
     loss_scale='dynamic',
     optimizer=dict(
         type=AdamW,
-        lr=1.5e-4 * 4096 / 256,
+        lr=1.5e-4 * 128*4 / 256,
         betas=(0.9, 0.95),
         weight_decay=0.05),
     paramwise_cfg=dict(
@@ -42,10 +45,10 @@ param_scheduler = [
         convert_to_iter_based=True),
     dict(
         type=CosineAnnealingLR,
-        T_max=60,
+        T_max=260,
         by_epoch=True,
         begin=40,
-        end=100,
+        end=200,
         convert_to_iter_based=True)
 ]
 
@@ -53,13 +56,14 @@ param_scheduler = [
 train_cfg = dict(type=EpochBasedTrainLoop, max_epochs=300)
 # only keeps the latest 3 checkpoints
 default_hooks.checkpoint = dict(
-    type=CheckpointHook, interval=1, max_keep_ckpts=3)
+    type=CheckpointHook, interval=1, max_keep_ckpts=20)
 
 randomness.update(seed=0, diff_rank_seed=True)
 
 # auto resume
 resume = True
 
+
 # NOTE: `auto_scale_lr` is for automatically scaling LR
 # based on the actual training batch size.
-auto_scale_lr = dict(base_batch_size=4096)
+auto_scale_lr = dict(base_batch_size=128*4)

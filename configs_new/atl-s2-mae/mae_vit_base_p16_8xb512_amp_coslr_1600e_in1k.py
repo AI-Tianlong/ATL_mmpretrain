@@ -3,7 +3,7 @@
 from mmengine.config import read_base
 
 with read_base():
-    from .._base_.models.mae_vit_base_p16 import *
+    from .._base_.models.atl_s2_mae_vit_base_p16 import *
     from .._base_.datasets.imagenet_bs512_mae import *
     from .._base_.default_runtime import *
 
@@ -12,6 +12,9 @@ from mmengine.optim.optimizer.amp_optimizer_wrapper import AmpOptimWrapper
 from mmengine.optim.scheduler.lr_scheduler import CosineAnnealingLR, LinearLR
 from mmengine.runner.loops import EpochBasedTrainLoop
 from torch.optim.adamw import AdamW
+
+
+# backbone 是 encoder, neck是decoder 在head中计算重建损失
 
 # optimizer wrapper
 optim_wrapper = dict(
@@ -42,15 +45,15 @@ param_scheduler = [
         convert_to_iter_based=True),
     dict(
         type=CosineAnnealingLR,
-        T_max=60,
+        T_max=1560,
         by_epoch=True,
         begin=40,
-        end=100,
+        end=1600,
         convert_to_iter_based=True)
 ]
 
 # runtime settings
-train_cfg = dict(type=EpochBasedTrainLoop, max_epochs=300)
+train_cfg = dict(type=EpochBasedTrainLoop, max_epochs=1600)
 # only keeps the latest 3 checkpoints
 default_hooks.checkpoint = dict(
     type=CheckpointHook, interval=1, max_keep_ckpts=3)
