@@ -28,9 +28,9 @@ class PixelReconstructionLoss(BaseModule):
     def __init__(self, criterion: str, channel: Optional[int] = None) -> None:
         super().__init__()
 
-        if criterion == 'L1':
+        if criterion == 'L1':    # 
             self.penalty = torch.nn.L1Loss(reduction='none')
-        elif criterion == 'L2':
+        elif criterion == 'L2':  # 均方误差
             self.penalty = torch.nn.MSELoss(reduction='none')
         else:
             raise NotImplementedError(f'Currently, PixelReconstructionLoss \
@@ -58,7 +58,7 @@ class PixelReconstructionLoss(BaseModule):
         # if the dim of the loss is 3, take the average of the loss
         # along the last dim
         if len(loss.shape) == 3:
-            loss = loss.mean(dim=-1)
+            loss = loss.mean(dim=-1)  
 
         if mask is None:
             loss = loss.mean()
@@ -66,6 +66,6 @@ class PixelReconstructionLoss(BaseModule):
         # 计算 loss * mask, 没有掩码掉的地方，loss为0
         # 掩码掉的地方 loss 为 1
         else:
-            loss = (loss * mask).sum() / mask.sum() / self.channel
+            loss = (loss * mask).sum() / mask.sum() / self.channel  #平均像素的loss
         
         return loss

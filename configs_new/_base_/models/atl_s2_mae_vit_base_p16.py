@@ -7,7 +7,7 @@ from mmpretrain.models import (MAE, MAEPretrainDecoder, MAEPretrainHead,
 model = dict(
     type=MAE,   # 相当于 mmseg 中的 Encoder-Decoder
     backbone=dict(
-        type=MAEViT,
+        type=MAEViT,      
         arch='b', 
         img_size=224,
         in_channels = 10, #10波段

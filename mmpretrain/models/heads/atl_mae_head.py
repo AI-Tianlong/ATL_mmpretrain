@@ -6,7 +6,7 @@ from mmpretrain.registry import MODELS
 
 
 @MODELS.register_module()
-class MAEPretrainHead(BaseModule):
+class ATL_MAEPretrainHead(BaseModule):
     """Head for MAE Pre-training.
 
     Args:

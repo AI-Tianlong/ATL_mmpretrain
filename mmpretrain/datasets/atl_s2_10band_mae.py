@@ -14,17 +14,25 @@ class ATL_S2_MAE_DATASET(CustomDataset):
     """
     # 对于无监督任务
         atl_s2_image
-        ├── train
-        │   ├── x1.tif
-        │   ├── y1.tif
-        │   └── ...
-        ├── val
-        │   ├── x3.tif
-        │   ├── y3.tif
-        │   └── ...
-        └── meta
-            ├── train.txt
-            └── val.txt
+        |── 1-黑龙江省_s2_10band_224_197973
+        │   ├── train
+        │   │   ├── x1.tif
+        │   │   ├── y1.tif
+        │   │   └── ...
+        │   ├── val
+        │   │   ├── x3.tif
+        │   │   ├── y3.tif
+        │   │   └── ...
+        |── 2-吉林省_s2_10band_224_102346
+        │   ├── train
+        │   │   ├── x1.tif
+        │   │   ├── y1.tif
+        │   │   └── ...
+        │   ├── val
+        │   │   ├── x3.tif
+        │   │   ├── y3.tif
+        │   │   └── ...
+
 
     Examples:
         >>> train_dataloader = dict(

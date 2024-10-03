@@ -15,7 +15,7 @@ from .nonlinear_neck import NonLinearNeck
 from .simmim_neck import SimMIMLinearDecoder
 from .spark_neck import SparKLightDecoder
 from .swav_neck import SwAVNeck
-
+from .atl_mae_neck import ATL_MAEPretrainDecoder
 __all__ = [
     'GlobalAveragePooling',
     'GeneralizedMeanPooling',
@@ -34,4 +34,5 @@ __all__ = [
     'SwAVNeck',
     'iTPNPretrainDecoder',
     'SparKLightDecoder',
+    'ATL_MAEPretrainDecoder'
 ]

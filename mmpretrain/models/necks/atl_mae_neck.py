@@ -12,7 +12,7 @@ from ..utils import build_2d_sincos_position_embedding
 
 
 @MODELS.register_module()
-class MAEPretrainDecoder(BaseModule):
+class ATL_MAEPretrainDecoder(BaseModule):
     """Decoder for MAE Pre-training.
 
     Some of the code is borrowed from `https://github.com/facebookresearch/mae`. # noqa
@@ -165,39 +165,13 @@ class MAEPretrainDecoder(BaseModule):
         x = self.decoder_pred(x)
 
         # remove cls token
-        x = x[:, 1:, :] # [128,196,2560]
+        x = x[:, 1:, :] 
 
         return x
+    
+# [128,196,2560] # 现在一个patch是 [128,196,16*16*10], 那么我既然想让重建目标变成 重建10个通道 + 5个指数的话。
+#                                                     那么重建目标就要变成 [128,196,16*16*(10+5)]，这样就可以了。
+#                                                     然后targets(head)那里，也变成 [128,196,16*16*(10+5)]，这样就可以了。
+#                                                     cat([128,196,16*16*10]和 [128,196,16*16*5])  
 
 
-@MODELS.register_module()
-class ClsBatchNormNeck(BaseModule):
-    """Normalize cls token across batch before head.
-
-    This module is proposed by MAE, when running linear probing.
-
-    Args:
-        input_features (int): The dimension of features.
-        affine (bool): a boolean value that when set to ``True``, this module
-            has learnable affine parameters. Defaults to False.
-        eps (float): a value added to the denominator for numerical stability.
-            Defaults to 1e-6.
-        init_cfg (Dict or List[Dict], optional): Config dict for weight
-            initialization. Defaults to None.
-    """
-
-    def __init__(self,
-                 input_features: int,
-                 affine: bool = False,
-                 eps: float = 1e-6,
-                 init_cfg: Optional[Union[dict, List[dict]]] = None) -> None:
-        super().__init__(init_cfg)
-        self.bn = nn.BatchNorm1d(input_features, affine=affine, eps=eps)
-
-    def forward(
-            self,
-            inputs: Tuple[List[torch.Tensor]]) -> Tuple[List[torch.Tensor]]:
-        """The forward function."""
-        # Only apply batch norm to cls_token
-        inputs = [self.bn(input_) for input_ in inputs]
-        return tuple(inputs)

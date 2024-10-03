@@ -56,7 +56,7 @@ class MAEViT(VisionTransformer):
     """
 
     def __init__(self,
-                 arch: Union[str, dict] = 'b', # base：
+                 arch: Union[str, dict] = 'b',
                  img_size: int = 224,
                  in_channels: int = 3,
                  patch_size: int = 16,
@@ -129,13 +129,11 @@ class MAEViT(VisionTransformer):
             - ``mask`` (torch.Tensor): mask used to mask image.
             - ``ids_restore`` (torch.Tensor): ids to restore original image.
         """
-        # 给进来的是patch_embed后的x，[128,196,768]
-        # import pdb; pdb.set_trace() # N=batch=128  L=length=num_patches=14*14=196, dim=768(超参设定的也可1024)
-        N, L, D = x.shape  # batch, length, dim (128,10,224,224) -> (128,768,14,14) -> (128,196,768)
+        N, L, D = x.shape  # batch, length, dim (1,3,224,224) -> (1,768,14,14) -> (1,196,768)
         len_keep = int(L * (1 - mask_ratio))   # 保留的 patch 数量  196*0.25=49
         
         # 一个随机数 对应一个patch
-        noise = torch.rand(N, L, device=x.device)  #[128,196]的一个随机数，一个patch一个随机数 noise in [0, 1]  # 生成一个 （batch,196）的随机矩阵，每个值[0,1]
+        noise = torch.rand(N, L, device=x.device)  # noise in [0, 1]  # 生成一个 （batch,196）的随机矩阵，每个值[0,1]
 
         # sort noise for each sample
         # (batch=1, 196)
@@ -147,17 +145,17 @@ class MAEViT(VisionTransformer):
         # keep the first subset
         # 挑前49个patch
         # (batch=1, 49)
-        ids_keep = ids_shuffle[:, :len_keep] #挑前49个[128,49]
+        ids_keep = ids_shuffle[:, :len_keep]
         
         # 保留前49个patch  
         # (batch=1, 49, 768), 保留前49哥 patch
         x_masked = torch.gather(
-            x, dim=1, index=ids_keep.unsqueeze(-1).repeat(1, 1, D)) #[129,49,768] #没掩的49个patch
+            x, dim=1, index=ids_keep.unsqueeze(-1).repeat(1, 1, D))
 
         # generate the binary mask: 0 is keep, 1 is remove
         #(1,196)
-        mask = torch.ones([N, L], device=x.device) # [128,196]
-        mask[:, :len_keep] = 0 # mask的前49个patch为0，后147个patch为1 没掩码的为0
+        mask = torch.ones([N, L], device=x.device)
+        mask[:, :len_keep] = 0 # mask的前49个patch为0，后147个patch为1
         # unshuffle to get the binary mask
         # 留下的 patch 的原始位置，第0个掩或不掩
         mask = torch.gather(mask, dim=1, index=ids_restore)
@@ -165,7 +163,7 @@ class MAEViT(VisionTransformer):
         # return 没有mask的49个 patch的值， 
         # mask用于恢复原始顺序的索引,哪个掩了 哪个没码，
         # ids_restore用于恢复原始顺序
-        # 没掩码的x的patch，mask掩码的位置，用于恢复原始顺序的索引
+
         # (1,49,768)   (1,196) (1,196,768)
         return x_masked, mask, ids_restore
 
@@ -186,8 +184,8 @@ class MAEViT(VisionTransformer):
 
 
         Args:
-            x (torch.Tensor): Input images, which is of shape B x C x H x W. # [128,10,224,224]
-            mask (bool, optional): To indicate whether the forward function  # True
+            x (torch.Tensor): Input images, which is of shape B x C x H x W.
+            mask (bool, optional): To indicate whether the forward function
                 generating ``mask`` or not.
 
         Returns:
@@ -199,33 +197,30 @@ class MAEViT(VisionTransformer):
             - ``mask`` (torch.Tensor): mask used to mask image.
             - ``ids_restore`` (torch.Tensor): ids to restore original image.
         """
-
-        # 那就是执行 ViT的 forward, 不进行掩码。
+        # 那就是执行 ViT的 forward
         if mask is None or False:
             return super().forward(x)
 
-        # B x C x H x W.  (128,3,224,224) (128, 10, 224, 224) 
-        # 否则，进行掩码
+        # B x C x H x W.  (1, 3, 224, 224)
         else:
-            B = x.shape[0]  # 128
-            x = self.patch_embed(x)[0]  # # 返回 x, out_size [128,196,768] (14,14), x-->[128,196,768]
+            B = x.shape[0]
+            x = self.patch_embed(x)[0]  #    (1, 196, 768), 
             # add pos embed w/o cls token  
             # # 然后加上位置编码，这里的self.pos_embed在初始化时加上了cls_token,因此这里取[:, 1:, :]。
             # pathch embed + pos embed，对应图中的分块+紫块
-            # self.pos_embed-->[1,197,768]
-            x = x + self.pos_embed[:, 1:, :] # [128,196,768]+[1,196,768]-->[128,196,768]
+            x = x + self.pos_embed[:, 1:, :]
 
             # masking: length -> length * mask_ratio
             #(1,49,768) (1,196),(1,196,768)
-            x, mask, ids_restore = self.random_masking(x, self.mask_ratio) #[128,49,768],[128,196],[128,196] #1-0.75=0.25，196个取49个不掩码
+            x, mask, ids_restore = self.random_masking(x, self.mask_ratio)
 
             # append cls token
-            # (B,C)     (1,1,768)              (1,197,768)中的[1,1,768]
-            cls_token = self.cls_token + self.pos_embed[:, :1, :]  # [1,1,768]
+            # (B,C)     (1,1,768)              (1,1+196,768)
+            cls_token = self.cls_token + self.pos_embed[:, :1, :]
             # (1,1,768)--->(B,1,768)
-            cls_tokens = cls_token.expand(B, -1, -1) # [1,1,768]-->[128,1,768] expand到batch
+            cls_tokens = cls_token.expand(B, -1, -1)
             # (1,1,768)+(1,49,768)-->(1,50,768)
-            x = torch.cat((cls_tokens, x), dim=1) # [128,50,768]  # 加上cls token
+            x = torch.cat((cls_tokens, x), dim=1)
             
             # 过一堆 bolck
             for _, layer in enumerate(self.layers):
@@ -234,19 +229,18 @@ class MAEViT(VisionTransformer):
             x = self.norm1(x)
             # 过完block的x，mask掩码位置，用于恢复原始顺序的索引
             # (1,50,768) (1,196) (1,196,768)
-
-            return (x, mask, ids_restore)  #[128,50,768] [128,196] [128,196]
+            return (x, mask, ids_restore) 
 
 
 # 这是type，MAE方法。 MAEViT是backbone，MAEPretrainDecoder是neck，MAEPretrainHead是head
 @MODELS.register_module()
-class MAE(BaseSelfSupervisor):
+class ATL_MAE(BaseSelfSupervisor):
     """MAE.
 
     Implementation of `Masked Autoencoders Are Scalable Vision Learners
     <https://arxiv.org/abs/2111.06377>`_.
     """
-    # 重写了 extract_feat 
+    # 重写了 extract_feat #过backbone，提取特征。 再看一眼ViT和VitAdapter的区别
     def extract_feat(self, inputs: torch.Tensor):
         return self.backbone(inputs, mask=None)
     
@@ -265,11 +259,12 @@ class MAE(BaseSelfSupervisor):
         """
         # ids_restore: the same as that in original repo, which is used
         # to recover the original order of tokens in decoder.
-        #(128,50,768) (128,196) (1281,196)
-        latent, mask, ids_restore = self.backbone(inputs) #过backbone,输出(128,50,768) (128,196) (128,196)
-        pred = self.neck(latent, ids_restore) # 过neck，恢复特征 ([128, 196, 2560]) 2590: 16*16*10 = 2560 一个token这么多像素--->（3通道是128,196,768）
-        loss = self.head.loss(pred, inputs, mask) # 然后去计算loss [128, 196, 2560] [128,10,224,224] [128,196],128个样本，每个样本196个patch，每个patch掩码/不掩码。1 0 1 0 1 0
-        losses = dict(loss=loss) # {'loss': tensor(1.3443, device='cuda:0', grad_fn=<DivBackward0>)}
+        #(1,50,768) (1,196) (1,196,768)
+        latent, mask, ids_restore = self.backbone(inputs)
+        # (1,196,768)
+        pred = self.neck(latent, ids_restore)
+        loss = self.head.loss(pred, inputs, mask)
+        losses = dict(loss=loss)
         return losses
 
 
@@ -347,7 +342,7 @@ class MAEHiViT(HiViT):
     def init_weights(self) -> None:
         """Initialize position embedding, patch embedding."""
         super().apply(self._init_weights)
-        pos_embed = build_2d_sincos_position_embedding(   #余弦位置编码，里面是0-1的数 [1,197,768]
+        pos_embed = build_2d_sincos_position_embedding(
             int(self.num_patches**.5),
             self.pos_embed.shape[-1],
             cls_token=False)

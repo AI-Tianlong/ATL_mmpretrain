@@ -231,7 +231,7 @@ class VisionTransformer(BaseBackbone):
                 'embed_dims': 768,
                 'num_layers': 12,
                 'num_heads': 12,
-                'feedforward_channels': 768 * 4
+                'feedforward_channels': 768 * 4 #3072
             }),
         **dict.fromkeys(
             ['dinov2-g', 'dinov2-giant'], {
@@ -294,7 +294,7 @@ class VisionTransformer(BaseBackbone):
             bias=not pre_norm,  # disable bias if pre_norm is used(e.g., CLIP)
         )
         _patch_cfg.update(patch_cfg)
-        self.patch_embed = PatchEmbed(**_patch_cfg)
+        self.patch_embed = PatchEmbed(**_patch_cfg)   # 返回 x, out_size
         self.patch_resolution = self.patch_embed.init_out_size
         num_patches = self.patch_resolution[0] * self.patch_resolution[1]
 
@@ -457,8 +457,8 @@ class VisionTransformer(BaseBackbone):
                     param.requires_grad = False
 
     def forward(self, x):
-        B = x.shape[0]
-        x, patch_resolution = self.patch_embed(x)
+        B = x.shape[0]  # 128
+        x, patch_resolution = self.patch_embed(x)  # (128, 196, 768), (14, 14)
 
         if self.cls_token is not None:
             # stole cls_tokens impl from Phil Wang, thanks

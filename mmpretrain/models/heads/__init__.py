@@ -32,6 +32,8 @@ from .vig_head import VigClsHead
 from .vision_transformer_head import VisionTransformerClsHead
 from .vqa_head import VQAGenerationHead
 
+from .atl_mae_head import ATL_MAEPretrainHead
+
 __all__ = [
     'ClsHead',
     'LinearClsHead',
@@ -66,4 +68,5 @@ __all__ = [
     'GroundingHead',
     'iTPNClipHead',
     'SparKPretrainHead',
+    'ATL_MAEPretrainHead'
 ]
