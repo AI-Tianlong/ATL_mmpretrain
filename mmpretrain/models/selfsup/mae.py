@@ -247,7 +247,7 @@ class MAE(BaseSelfSupervisor):
     <https://arxiv.org/abs/2111.06377>`_.
     """
     # 重写了 extract_feat 
-    def extract_feat(self, inputs: torch.Tensor):
+    def extract_feat(self, inputs: torch.Tensor):  
         return self.backbone(inputs, mask=None)
     
     # 重写了 loss 的计算

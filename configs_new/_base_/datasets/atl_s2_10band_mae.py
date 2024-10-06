@@ -10,7 +10,7 @@ from mmseg.datasets.transforms.loading import LoadSingleRSImageFromFile
 
 # dataset settings
 dataset_type = ATL_S2_MAE_DATASET
-data_root = 'data/atl_s2_黑_吉_辽_5B_Euro_543467/'
+data_root = 'data/0-paper-pretrain/'
 
 
 # 本身就是除了10000的反射率，不进行归一化处理了？
@@ -35,8 +35,8 @@ train_pipeline = [
 ]
 
 train_dataloader = dict(
-    batch_size=32,  # batch=128*4 = 512。我扩大成4096呢？
-    num_workers=4,
+    batch_size=512,  # batch=128*4 = 512。我扩大成4096呢？
+    num_workers=16,
     persistent_workers=True,
     sampler=dict(type=DefaultSampler, shuffle=True),
     collate_fn=dict(type='default_collate'),

@@ -56,7 +56,7 @@ optim_wrapper = dict(
     loss_scale='dynamic',
     optimizer=dict(
         type=AdamW,
-        lr=1.5e-4 * 16*4 / 256,
+        lr=1.5e-4 * 512*3 / 256,
         betas=(0.9, 0.95),
         weight_decay=0.05),
     paramwise_cfg=dict(
@@ -75,14 +75,14 @@ param_scheduler = [
         start_factor=0.0001,
         by_epoch=True,
         begin=0,
-        end=10,
+        end=40,
         convert_to_iter_based=True),
     dict(
         type=CosineAnnealingLR,
-        T_max=40,
+        T_max=60,
         by_epoch=True,
-        begin=10,
-        end=50,
+        begin=40,
+        end=100,
         convert_to_iter_based=True)
 ]
 
@@ -90,7 +90,7 @@ param_scheduler = [
 train_cfg = dict(type=EpochBasedTrainLoop, max_epochs=100)
 # only keeps the latest 3 checkpoints
 default_hooks.checkpoint = dict(
-    type=CheckpointHook, interval=1, max_keep_ckpts=20)
+    type=CheckpointHook, interval=1, max_keep_ckpts=3)
 
 randomness.update(seed=0, diff_rank_seed=True)
 
@@ -100,4 +100,4 @@ resume = True
 # NOTE: `auto_scale_lr` is for automatically scaling LR
 # based on the actual training batch size.
 per_gpu_batch_size = train_dataloader.batch_size
-auto_scale_lr = dict(base_batch_size=per_gpu_batch_size*4)
+auto_scale_lr = dict(base_batch_size=per_gpu_batch_size*3)
