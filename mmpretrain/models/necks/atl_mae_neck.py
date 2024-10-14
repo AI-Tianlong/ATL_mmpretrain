@@ -32,6 +32,7 @@ class ATL_MAEPretrainDecoder(BaseModule):
         norm_cfg (dict): Normalization layer. Defaults to LayerNorm.
         init_cfg (Union[List[dict], dict], optional): Initialization config
             dict. Defaults to None.
+        index_name (List[str]): The name of RS index. Defaults to None.
 
     Example:
         >>> from mmpretrain.models import MAEPretrainDecoder
@@ -56,8 +57,10 @@ class ATL_MAEPretrainDecoder(BaseModule):
                  mlp_ratio: int = 4,
                  norm_cfg: dict = dict(type='LN', eps=1e-6),
                  predict_feature_dim: Optional[float] = None,
-                 init_cfg: Optional[Union[List[dict], dict]] = None) -> None:
+                 init_cfg: Optional[Union[List[dict], dict]] = None,
+                 index_name = Optional[List[str]]) -> None:
         super().__init__(init_cfg=init_cfg)
+        self.rs_index_name = index_name # ['NDVI','NDSI','NDBI']
         self.num_patches = num_patches # 196个
 
         # used to convert the dim of features from encoder to the dim
@@ -91,8 +94,15 @@ class ATL_MAEPretrainDecoder(BaseModule):
         # Used to map features to pixels
         if predict_feature_dim is None:  # 16*16*3 = 768, 16*16*10 = 2560!!!!，一个patch包含的像素
             predict_feature_dim = patch_size**2 * in_chans #如果没指定，是多光谱，则变成了10, 则默认是16*16*通道数
+        
+        if self.rs_index_name is not None:
+            rs_index_feature_dim = patch_size**2 * len(self.rs_index_name) # 16*16*（4）
+            self.decoder_pred_rs_index = nn.Linear(decoder_embed_dim, rs_index_feature_dim, bias=True) # (512)-->(1024) (16*16*4)
+        
         self.decoder_pred = nn.Linear(  # (512)--->(2560)维度 # 16*16*10 2560，一个线性层
             decoder_embed_dim, predict_feature_dim, bias=True)
+        
+
 
     def init_weights(self) -> None:
         """Initialize position embedding and mask token of MAE decoder."""
@@ -130,12 +140,13 @@ class ATL_MAEPretrainDecoder(BaseModule):
         """
         # embed tokens
         # 这里可以打印一下
-        x = self.decoder_embed(x) #(128,50,768)-->(128,50,512)，一个patch是一个1*512的向量
+        # import pdb;pdb.set_trace()   
+        x = self.decoder_embed(x) #(128,50,1024)-->(128,50,512)，一个patch是一个1*512的向量
 
         # append mask tokens to sequence
         # (1,1,512)-->(1,147,512)  # 196+1-50=147个mask token
         mask_tokens = self.mask_token.repeat(
-            x.shape[0], ids_restore.shape[1] + 1 - x.shape[1], 1)
+            x.shape[0], ids_restore.shape[1] + 1 - x.shape[1], 1) # 147个mask token
         # x的第0是 cls_token,
         # (1,49,512)+(1,147,512) = (1,196,512) -->恢复成了原来的196个patch
         x_ = torch.cat([x[:, 1:, :], mask_tokens], dim=1)
@@ -146,7 +157,6 @@ class ATL_MAEPretrainDecoder(BaseModule):
             index=ids_restore.unsqueeze(-1).repeat(1, 1, x.shape[2]))
         # (1,1,512)+(1,196,512) = (1,197,512)
         x = torch.cat([x[:, :1, :], x_], dim=1) #再把cls_token加回去
-
         
         # add pos embed
         # token embed + pos embed
@@ -156,22 +166,12 @@ class ATL_MAEPretrainDecoder(BaseModule):
         # apply Transformer blocks，过几个Transformer块。
         for blk in self.decoder_blocks:
             x = blk(x)           #[1,197,512]
-        x = self.decoder_norm(x)
-
-        # import pdb; pdb.set_trace()
-        # predictor projection
+        x = self.decoder_norm(x) # [512,197,512]
 
         # (1,197,512)--->(1,197,2560)：# 768：16*16*3，但是我10个通道，应该是16*16*10
-        x = self.decoder_pred(x)
-
+        pred = self.decoder_pred(x) # 将512通道映射会 2560 通道 # 重建图像 # [1,197,512]-->[1,197,2560]
+        pred_rs_index = self.decoder_pred_rs_index(x) # (1,197,512)-->(1,197,1024) # 重建指数
         # remove cls token
-        x = x[:, 1:, :] 
-
-        return x
-    
-# [128,196,2560] # 现在一个patch是 [128,196,16*16*10], 那么我既然想让重建目标变成 重建10个通道 + 5个指数的话。
-#                                                     那么重建目标就要变成 [128,196,16*16*(10+5)]，这样就可以了。
-#                                                     然后targets(head)那里，也变成 [128,196,16*16*(10+5)]，这样就可以了。
-#                                                     cat([128,196,16*16*10]和 [128,196,16*16*5])  
-
-
+        pred = pred[:, 1:, :]  # ([1, 196, 2560])
+        pred_rs_index = pred_rs_index[:, 1:, :] # ([1, 196, 1024])
+        return pred, pred_rs_index  # [1,196,2560]原始图像的，[1,196,1024] RS指数的 

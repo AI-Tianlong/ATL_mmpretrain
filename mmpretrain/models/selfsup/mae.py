@@ -10,6 +10,77 @@ from ..utils import build_2d_sincos_position_embedding
 from .base import BaseSelfSupervisor
 
 
+
+@MODELS.register_module()
+class ATL_MAE(BaseSelfSupervisor):
+    """MAE.
+
+    Implementation of `Masked Autoencoders Are Scalable Vision Learners
+    <https://arxiv.org/abs/2111.06377>`_.
+    """
+    # 重写了 extract_feat 
+    def extract_feat(self, inputs: torch.Tensor):  
+        return self.backbone(inputs, mask=None) # [2,10,224,224]-->[1,50,1024]
+    
+    # 重写了 loss 的计算
+    def loss(self, inputs: torch.Tensor, data_samples: List[DataSample],
+             **kwargs) -> Dict[str, torch.Tensor]:
+        """The forward function in training.
+
+        Args:
+            inputs (torch.Tensor): The input images.
+            data_samples (List[DataSample]): All elements required
+                during the forward function.
+
+        Returns:
+            Dict[str, torch.Tensor]: A dictionary of loss components.
+        """
+        # ids_restore: the same as that in original repo, which is used
+        # to recover the original order of tokens in decoder.
+        #(128,50,768) (128,196) (1281,196)
+        latent, mask, ids_restore = self.backbone(inputs) #过backbone,输出(128,50,1024) (128,196) (128,196)
+        pred, pred_rs_index = self.neck(latent, ids_restore) # 过neck，恢复特征 ([128, 196, 2560]) 2590: 16*16*10 = 2560 一个token这么多像素--->（3通道是128,196,768）
+        loss = self.head.loss(pred, pred_rs_index, inputs, mask) # 过loss的forward
+        losses = dict(loss=loss) # {'loss': tensor(1.3443, device='cuda:0', grad_fn=<DivBackward0>)}
+        return losses
+
+
+
+
+# 这是type，MAE方法。 MAEViT是backbone，MAEPretrainDecoder是neck，MAEPretrainHead是head
+@MODELS.register_module()
+class MAE(BaseSelfSupervisor):
+    """MAE.
+
+    Implementation of `Masked Autoencoders Are Scalable Vision Learners
+    <https://arxiv.org/abs/2111.06377>`_.
+    """
+    # 重写了 extract_feat 
+    def extract_feat(self, inputs: torch.Tensor):  
+        return self.backbone(inputs, mask=None) # [2,10,224,224]-->[1,50,1024]
+    
+    # 重写了 loss 的计算
+    def loss(self, inputs: torch.Tensor, data_samples: List[DataSample],
+             **kwargs) -> Dict[str, torch.Tensor]:
+        """The forward function in training.
+
+        Args:
+            inputs (torch.Tensor): The input images.
+            data_samples (List[DataSample]): All elements required
+                during the forward function.
+
+        Returns:
+            Dict[str, torch.Tensor]: A dictionary of loss components.
+        """
+        # ids_restore: the same as that in original repo, which is used
+        # to recover the original order of tokens in decoder.
+        #(128,50,768) (128,196) (1281,196)
+        latent, mask, ids_restore = self.backbone(inputs) #过backbone,输出(128,50,1024) (128,196) (128,196)
+        pred = self.neck(latent, ids_restore) # 过neck，恢复特征 ([128, 196, 2560]) 2590: 16*16*10 = 2560 一个token这么多像素--->（3通道是128,196,768）
+        loss = self.head.loss(pred, inputs, mask) # 然后去计算loss [128, 196, 2560] [128,10,224,224] [128,196],128个样本，每个样本196个patch，每个patch掩码/不掩码。1 0 1 0 1 0
+        losses = dict(loss=loss) # {'loss': tensor(1.3443, device='cuda:0', grad_fn=<DivBackward0>)}
+        return losses
+
 @MODELS.register_module()
 class MAEViT(VisionTransformer):
     """Vision Transformer for MAE pre-training.
@@ -60,7 +131,7 @@ class MAEViT(VisionTransformer):
                  img_size: int = 224,
                  in_channels: int = 3,
                  patch_size: int = 16,
-                 out_indices: Union[Sequence, int] = -1,
+                 out_indices: Union[Sequence, int] = -1,  #默认输出最后一个阶段的特征
                  drop_rate: float = 0,
                  drop_path_rate: float = 0,
                  norm_cfg: dict = dict(type='LN', eps=1e-6),
@@ -199,11 +270,10 @@ class MAEViT(VisionTransformer):
             - ``mask`` (torch.Tensor): mask used to mask image.
             - ``ids_restore`` (torch.Tensor): ids to restore original image.
         """
-
         # 那就是执行 ViT的 forward, 不进行掩码。
         if mask is None or False:
             return super().forward(x)
-
+            
         # B x C x H x W.  (128,3,224,224) (128, 10, 224, 224) 
         # 否则，进行掩码
         else:
@@ -238,39 +308,7 @@ class MAEViT(VisionTransformer):
             return (x, mask, ids_restore)  #[128,50,768] [128,196] [128,196]
 
 
-# 这是type，MAE方法。 MAEViT是backbone，MAEPretrainDecoder是neck，MAEPretrainHead是head
-@MODELS.register_module()
-class MAE(BaseSelfSupervisor):
-    """MAE.
 
-    Implementation of `Masked Autoencoders Are Scalable Vision Learners
-    <https://arxiv.org/abs/2111.06377>`_.
-    """
-    # 重写了 extract_feat 
-    def extract_feat(self, inputs: torch.Tensor):
-        return self.backbone(inputs, mask=None)
-    
-    # 重写了 loss 的计算
-    def loss(self, inputs: torch.Tensor, data_samples: List[DataSample],
-             **kwargs) -> Dict[str, torch.Tensor]:
-        """The forward function in training.
-
-        Args:
-            inputs (torch.Tensor): The input images.
-            data_samples (List[DataSample]): All elements required
-                during the forward function.
-
-        Returns:
-            Dict[str, torch.Tensor]: A dictionary of loss components.
-        """
-        # ids_restore: the same as that in original repo, which is used
-        # to recover the original order of tokens in decoder.
-        #(128,50,768) (128,196) (1281,196)
-        latent, mask, ids_restore = self.backbone(inputs) #过backbone,输出(128,50,768) (128,196) (128,196)
-        pred = self.neck(latent, ids_restore) # 过neck，恢复特征 ([128, 196, 2560]) 2590: 16*16*10 = 2560 一个token这么多像素--->（3通道是128,196,768）
-        loss = self.head.loss(pred, inputs, mask) # 然后去计算loss [128, 196, 2560] [128,10,224,224] [128,196],128个样本，每个样本196个patch，每个patch掩码/不掩码。1 0 1 0 1 0
-        losses = dict(loss=loss) # {'loss': tensor(1.3443, device='cuda:0', grad_fn=<DivBackward0>)}
-        return losses
 
 
 @MODELS.register_module()

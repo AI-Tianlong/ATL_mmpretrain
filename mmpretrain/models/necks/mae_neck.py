@@ -69,9 +69,10 @@ class MAEPretrainDecoder(BaseModule):
         # create new position embedding, different from that in encoder
         # and is not learnable
         # 不可学习的参数(1, 196+1, 512)
-        self.decoder_pos_embed = nn.Parameter(
+        self.decoder_pos_embed = nn.Parameter(  # 应该变成 224/8 * 224/8 = 784 [1,785,512]
             torch.zeros(1, self.num_patches + 1, decoder_embed_dim),
             requires_grad=False)
+        # import pdb; pdb.set_trace() 
 
         # decoder layers, 8个decoder block
         self.decoder_blocks = nn.ModuleList([

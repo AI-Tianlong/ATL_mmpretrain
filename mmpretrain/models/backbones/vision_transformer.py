@@ -457,13 +457,14 @@ class VisionTransformer(BaseBackbone):
                     param.requires_grad = False
 
     def forward(self, x):
+        # import pdb;pdb.set_trace() #x [2,10,224,224]
         B = x.shape[0]  # 128
-        x, patch_resolution = self.patch_embed(x)  # (128, 196, 768), (14, 14)
+        x, patch_resolution = self.patch_embed(x)  # (128, 196, 1024), (14, 14)
 
         if self.cls_token is not None:
             # stole cls_tokens impl from Phil Wang, thanks
-            cls_token = self.cls_token.expand(B, -1, -1)
-            x = torch.cat((cls_token, x), dim=1)
+            cls_token = self.cls_token.expand(B, -1, -1)  #[1,1,1024]->[2,1,1024]
+            x = torch.cat((cls_token, x), dim=1)  # [2,197,1024]
 
         x = x + resize_pos_embed(
             self.pos_embed,
@@ -484,8 +485,8 @@ class VisionTransformer(BaseBackbone):
 
             if i in self.out_indices:
                 outs.append(self._format_output(x, patch_resolution))
-
-        return tuple(outs)
+        # import pdb;pdb.set_trace()
+        return tuple(outs) #[2,197,1024]
 
     def _format_output(self, x, hw):
         if self.out_type == 'raw':
