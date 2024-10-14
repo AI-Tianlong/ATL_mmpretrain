@@ -7,7 +7,7 @@ from .cae import CAE, CAEPretrainViT, DALLEEncoder
 from .densecl import DenseCL
 from .eva import EVA
 from .itpn import iTPN, iTPNHiViT
-from .mae import MAE, MAEHiViT, MAEViT, ATL_MAE
+from .mae import MAE, MAEHiViT, MAEViT
 from .maskfeat import HOGGenerator, MaskFeat, MaskFeatViT
 from .mff import MFF, MFFViT
 from .milan import MILAN, CLIPGenerator, MILANViT
@@ -19,6 +19,8 @@ from .simmim import SimMIM, SimMIMSwinTransformer
 from .simsiam import SimSiam
 from .spark import SparK
 from .swav import SwAV
+
+from .atl_mae import ATL_MAE
 
 __all__ = [
     'BaseSelfSupervisor',

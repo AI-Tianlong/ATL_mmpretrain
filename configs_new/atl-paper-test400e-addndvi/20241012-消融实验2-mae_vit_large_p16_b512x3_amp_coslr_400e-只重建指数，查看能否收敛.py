@@ -12,7 +12,7 @@ from torch.optim.adamw import AdamW
 from mmpretrain.models import (MAE, MAEPretrainDecoder, MAEPretrainHead,
                                MAEViT, PixelReconstructionLoss)
 
-from mmpretrain.models.selfsup.mae import ATL_MAE
+from mmpretrain.models.selfsup.atl_mae import ATL_MAE
 from mmpretrain.models.heads.atl_mae_head import ATL_MAEPretrainHead
 from mmpretrain.models.necks.atl_mae_neck import ATL_MAEPretrainDecoder
 from mmpretrain.models.losses.atl_reconstruction_loss import ATL_PixelReconstructionLoss
