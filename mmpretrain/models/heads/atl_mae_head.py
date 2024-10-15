@@ -117,6 +117,9 @@ class ATL_MAEPretrainHead(BaseModule):
         # B x len(index) x H x W 
         # 0:B2  1:B3  2:B4  3:B5  4:B6  5:B7  6:B8  7:B8A  8:B11  9:B12
         # [B, 4, H, W] # [128, 4, 224, 224]
+        def limit_output(output):
+            output = torch.clamp(output, -1, 1) # 限制所有值在【-2, -2之间】,防止过大导致梯度出问题
+            return output
         S2 = Get_Sentinel2_Band_index()
         # 注意，这里的指数计算，可能会由于图像中含有nan值-->某些像素为0-->导致指数计算出现nan值，需要屏蔽掉这些nan值，指数中为nan的值变成0。
         target_index = torch.zeros(target.shape[0], len(self.index_name), target.shape[2], target.shape[3], device=target.device) # [B, 4, 224, 224]
@@ -124,26 +127,18 @@ class ATL_MAEPretrainHead(BaseModule):
             if rs_index == 'SAVI': # SAVI = ((NIR-RED)/(NIR+RED+L))*(1+L) = ((B8-B4)/(B8+B4+0.5))*(1+0.5)  # B8A-B4/B8A+B4+0.5
                 target_index[:, i] = ((target[:, S2['B8']] - target[:, S2['B4']]) / 
                                       (target[:, S2['B8']] + target[:, S2['B4']] + 0.5)) * (1+0.5) # 用不用+1.e-6
-
+                target_index[:, i] = limit_output(target_index[:, i])
             elif rs_index == 'MNDWI': # MNDWI = (GREEN-SWIR1)/(GREEN+SWIR1) = (B3-B11)/(B3+B11)
                 target_index[:, i] = (target[:, S2['B3']] - target[:, S2['B11']]) / (target[:, S2['B3']] + target[:, S2['B11']])
-            
+                target_index[:, i] = limit_output(target_index[:, i])
             elif rs_index == 'PII':  # 需要对水进行掩码处理
                 # PII = 0.905*B2 -0.435*B8 +0.019
                 target_index[:, i] = 0.905 * target[:, S2['B2']] - 0.435 * target[:, S2['B8']] + 0.019
-            # elif rs_index == 'IBI': 
-            #     # IBI = (NDBI-(SAVI-MNDWI)/2) / (NDBI+(SAVI+MNDWI)/2)
-            #     # NDBI = (SWIR1-NIR)/(SWIR1+NIR) = (B11-B8)/(B11+B8)
-            #     # SAVI = ((NIR-RED)/(NIR+RED+L))*(1+L) = ((B8-B4)/(B8+B4+0.5))*(1+0.5)  # B8A-B4/B8A+B4+0.5
-            #     # MNDWI = (GREEN-SWIR1)/(GREEN+SWIR1) = (B3-B11)/(B3+B11)
-            #     NDBI = (target[:, S2['B11']] - target[:, S2['B8']]) / (target[:, S2['B11']] + target[:, S2['B8']])
-            #     SAVI = ((target[:, S2['B8']] - target[:, S2['B4']]) / (target[:, S2['B8']] + target[:, S2['B4']] + 0.5)) * (1+0.5) # 用不用+1.e-6
-            #     MNDWI = (target[:, S2['B3']] - target[:, S2['B11']]) / (target[:, S2['B3']] + target[:, S2['B11']])
-            #     IBI = (NDBI - (SAVI + MNDWI) / 2) / (NDBI + (SAVI + MNDWI) / 2)
-            #     target_index[:, i] = IBI
+                target_index[:, i] = limit_output(target_index[:, i])
             elif rs_index == '-MBSI': # MBSI = 2*(RED-GREEN)/(RED+GREEN-2) = 2*(B4-B3)/(B4+B3-2) # 裸土是负值，小的，所以处理要注意加-号？
                 target_index[:, i] = (-1) * 2*(target[:, S2['B4']] - target[:, S2['B3']]) / (target[:, S2['B4']] + target[:, S2['B3']] - 2)
-        
+                target_index[:, i] = limit_output(target_index[:, i])
+
         if torch.isnan(target_index).any():
             target_index = torch.nan_to_num(target_index, nan=0.) #所有的nan变成了0.
 
@@ -162,6 +157,10 @@ class ATL_MAEPretrainHead(BaseModule):
             mean = target.mean(dim=-1, keepdim=True)
             var = target.var(dim=-1, keepdim=True)
             target = (target - mean) / (var + 1.e-6)**.5
+            
+            mean_index = target_index.mean(dim=-1, keepdim=True)
+            var_index = target_index.var(dim=-1, keepdim=True)
+            target_index = (target_index - mean_index) / (var_index + 1.e-6)**.5
 
         # import pdb;pdb.set_trace()
         return target, target_index  # 返回重建的目标，这个和neck的输出是一致的。

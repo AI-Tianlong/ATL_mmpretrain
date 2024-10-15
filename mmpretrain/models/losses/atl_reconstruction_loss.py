@@ -7,6 +7,7 @@ from mmengine.model import BaseModule
 from mmpretrain.registry import MODELS
 
 
+
 @MODELS.register_module()
 class ATL_PixelReconstructionLoss(BaseModule):
     """Loss for the reconstruction of pixel in Masked Image Modeling.
@@ -82,24 +83,29 @@ class ATL_PixelReconstructionLoss(BaseModule):
             loss_index_mean = loss_index.mean() # 所有像素都做loss      # 0.7740, 但是这里会出现nan！！！！！ 出现nan怎么办！！！
             # 掩码了的loss，总共为943.2922, 平均在每个像素上的loss为0.0003
         
-        # loss = 1.0* loss_image_mean + 0.5 * loss_index_mean  # 保持一个大小？
-
-        loss = loss_index_mean # 去测试，重建指数能否收敛，find_unuserd_parm=True。
+        loss = 1.0* loss_image_mean + 0.4 * loss_index_mean  # 保持一个大小？
+        
+        rank = torch.distributed.get_rank()
+        if rank == 0:
+            print('【ATL-loss_image_mean:', loss_image_mean, '【ATL-loss_index_mean:', loss_index_mean)
+        
+        # loss = loss_index_mean # 去测试，重建指数能否收敛，find_unuserd_parm=True。 0.7663附近
 
         if loss.isnan().any():
+            rank = torch.distributed.get_rank()
+            if rank == 0:
+                print('【ATL-loss_image_mean:', loss_image_mean, '【ATL-loss_index_mean:', loss_index_mean)
             import numpy as np
             # np.save('/data/AI-Tianlong/openmmlab/mmpretrain/configs_new/atl-paper-test400e-addndvi/1-loss_image_mean-81npy', loss_image_mean.cpu().detach().numpy())
-            np.save('/data/AI-Tianlong/openmmlab/mmpretrain/configs_new/atl-paper-test400e-addndvi/1-loss_index_mean-数.npy', loss_index_mean.cpu().detach().numpy())
-            
+            np.save('/share/home/aitlong/AI-Tianlong/checkpoints/2-预训练过程中的问题/1-loss_index_mean-数.npy', loss_index_mean.cpu().detach().numpy())
             # np.save('/data/AI-Tianlong/openmmlab/mmpretrain/configs_new/atl-paper-test400e-addndvi/2-loss_image_mean-67npy', self.penalty(pred, target).cpu().detach().numpy())
-            np.save('/data/AI-Tianlong/openmmlab/mmpretrain/configs_new/atl-paper-test400e-addndvi/2-loss_index_mean-67.npy', self.penalty(pred_rs_index, target_index).cpu().detach().numpy())
+            np.save('/share/home/aitlong/AI-Tianlong/checkpoints/2-预训练过程中的问题/2-loss_index_mean-67.npy', self.penalty(pred_rs_index, target_index).cpu().detach().numpy())
+            np.save('/share/home/aitlong/AI-Tianlong/checkpoints/2-预训练过程中的问题/3-pred_rs_index-token.npy', pred_rs_index.cpu().detach().numpy())
+            np.save('/share/home/aitlong/AI-Tianlong/checkpoints/2-预训练过程中的问题/3-target_index-token.npy', target_index.cpu().detach().numpy())
+            np.save('/share/home/aitlong/AI-Tianlong/checkpoints/2-预训练过程中的问题/3-unpatchify-target_index-token.npy', unpatchify(target_index,4).cpu().detach().numpy())
 
-            np.save('/data/AI-Tianlong/openmmlab/mmpretrain/configs_new/atl-paper-test400e-addndvi/3-pred_rs_index-token.npy', pred_rs_index.cpu().detach().numpy())
-            np.save('/data/AI-Tianlong/openmmlab/mmpretrain/configs_new/atl-paper-test400e-addndvi/3-target_index-token.npy', target_index.cpu().detach().numpy())
-            np.save('/data/AI-Tianlong/openmmlab/mmpretrain/configs_new/atl-paper-test400e-addndvi/3-unpatchify-target_index-token.npy', unpatchify(target_index,4).cpu().detach().numpy())
-
-            np.save('/data/AI-Tianlong/openmmlab/mmpretrain/configs_new/atl-paper-test400e-addndvi/4-unpatchify_pred.npy', unpatchify(pred,10).cpu().detach().numpy())
-            np.save('/data/AI-Tianlong/openmmlab/mmpretrain/configs_new/atl-paper-test400e-addndvi/4-unpatchify_target.npy', unpatchify(target,10).cpu().detach().numpy())
+            np.save('/share/home/aitlong/AI-Tianlong/checkpoints/2-预训练过程中的问题/4-unpatchify_pred.npy', unpatchify(pred,10).cpu().detach().numpy())
+            np.save('/share/home/aitlong/AI-Tianlong/checkpoints/2-预训练过程中的问题/4-unpatchify_target.npy', unpatchify(target,10).cpu().detach().numpy())
 
             print('【ATL-LOG】nan in loss')
             import pdb;pdb.set_trace()

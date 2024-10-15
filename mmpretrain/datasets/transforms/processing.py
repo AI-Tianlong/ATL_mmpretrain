@@ -237,6 +237,7 @@ class RandomCrop(BaseTransform):
         return repr_str
 
 
+
 @TRANSFORMS.register_module()
 class RandomResizedCrop(BaseTransform):
     """Crop the given image to random scale and aspect ratio.
@@ -390,6 +391,43 @@ class RandomResizedCrop(BaseTransform):
         repr_str += f', backend={self.backend})'
         return repr_str
 
+@TRANSFORMS.register_module()
+class ATL_RandomResizedCrop(RandomResizedCrop):
+    def __init__(self,
+                 scale: int,
+                 interpolation: str = 'bicubic',
+                 **kwarg):
+        assert isinstance(scale, int)
+        super().__init__(scale, interpolation=interpolation, **kwarg)
+
+        
+    def transform(self, results: dict) -> dict:
+        """Transform function to randomly resized crop images.
+
+        Args:
+            results (dict): Result dict from loading pipeline.
+
+        Returns:
+            dict: Randomly resized cropped results, 'img_shape'
+                key in result dict is updated according to crop size.
+        """
+        img = results['img']
+        offset_h, offset_w, target_h, target_w = self.rand_crop_params(img)
+        img = mmcv.imcrop(
+            img,
+            bboxes=np.array([
+                offset_w, offset_h, offset_w + target_w - 1,
+                offset_h + target_h - 1
+            ]))
+        img = mmcv.imresize(
+            img,
+            tuple(self.scale[::-1]),
+            interpolation=self.interpolation,
+            backend=self.backend)
+        results['img'] = img
+        results['img_shape'] = img.shape
+
+        return results
 
 @TRANSFORMS.register_module()
 class EfficientNetRandomCrop(RandomResizedCrop):
