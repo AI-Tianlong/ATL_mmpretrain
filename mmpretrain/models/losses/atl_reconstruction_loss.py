@@ -85,9 +85,9 @@ class ATL_PixelReconstructionLoss(BaseModule):
         
         loss = 1.0* loss_image_mean + 0.4 * loss_index_mean  # 保持一个大小？
         
-        rank = torch.distributed.get_rank()
-        if rank == 0:
-            print('【ATL-loss_image_mean:', loss_image_mean, '【ATL-loss_index_mean:', loss_index_mean)
+        # rank = torch.distributed.get_rank()
+        # if rank == 0:
+        #     print('【ATL-loss_image_mean:', loss_image_mean, '【ATL-loss_index_mean:', loss_index_mean)
         
         # loss = loss_index_mean # 去测试，重建指数能否收敛，find_unuserd_parm=True。 0.7663附近
 

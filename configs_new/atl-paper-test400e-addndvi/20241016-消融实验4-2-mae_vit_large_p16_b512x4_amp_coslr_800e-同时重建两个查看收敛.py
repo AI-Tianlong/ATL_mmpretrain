@@ -87,15 +87,15 @@ param_scheduler = [
         convert_to_iter_based=True),
     dict(
         type=CosineAnnealingLR,
-        T_max=360,
+        T_max=760,
         by_epoch=True,
         begin=40,
-        end=400,
+        end=800,
         convert_to_iter_based=True)
 ]
 
 # runtime settings
-train_cfg = dict(type=EpochBasedTrainLoop, max_epochs=400)
+train_cfg = dict(type=EpochBasedTrainLoop, max_epochs=800)
 # only keeps the latest 3 checkpoints
 default_hooks.checkpoint = dict(
     type=CheckpointHook, interval=1, max_keep_ckpts=5)

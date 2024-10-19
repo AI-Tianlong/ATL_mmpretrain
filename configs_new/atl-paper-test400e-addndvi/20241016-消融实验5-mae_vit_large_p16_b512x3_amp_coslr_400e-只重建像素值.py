@@ -24,7 +24,7 @@ with read_base():
 
 # model settings
 model = dict(
-    type=ATL_MAE,   # 相当于 mmseg 中的 Encoder-Decoder
+    type=MAE,   # 相当于 mmseg 中的 Encoder-Decoder
     backbone=dict(
         type=MAEViT,  # backbone是encoder  # 这个backbone不动，就是个ViT
         arch='l',      # size: dim, num_layers, num_heads, feedforward_channels 
@@ -33,7 +33,7 @@ model = dict(
         patch_size=16, 
         mask_ratio=0.75),
     neck=dict(      # neck 是decoder
-        type=ATL_MAEPretrainDecoder,
+        type=MAEPretrainDecoder,
         patch_size=16,
         in_chans=10,
         embed_dim=1024,  # 和backbone的 embed_dim 0得对上
@@ -41,16 +41,16 @@ model = dict(
         decoder_depth=8,
         decoder_num_heads=16,
         mlp_ratio=4.,
-        index_name = ['SAVI','MNDWI','PII','-MBSI'], # 植被, 水体, 裸地，人造地表
+        # index_name = ['SAVI','MNDWI','PII','-MBSI'], # 植被, 水体, 裸地，人造地表
         # index_name = None,
     ),
     head=dict(
-        type=ATL_MAEPretrainHead,   # 所以我要改重建的目标，就是改这里！ 怎么说，通过encode 和 decoder 简单的进行一个逐像素的分割。
+        type=MAEPretrainHead,   # 所以我要改重建的目标，就是改这里！ 怎么说，通过encode 和 decoder 简单的进行一个逐像素的分割。
         in_channels=10,
         norm_pix=True,  # 是否对重建目标进行归一化，默认True，因为本身就是0-1反射率，这里弄成False，可以弄一个消融实验。
         patch_size=16,
-        index_name = ['SAVI','MNDWI','PII','-MBSI'], # 植被, 水体, 裸地，人造地表
-        loss=dict(type=ATL_PixelReconstructionLoss, criterion='L2')), # Pixel重建LOSS L2
+        # index_name = ['SAVI','MNDWI','PII','-MBSI'], # 植被, 水体, 裸地，人造地表
+        loss=dict(type=PixelReconstructionLoss, criterion='L2')), # Pixel重建LOSS L2
     init_cfg=[
         dict(type='Xavier', layer='Linear', distribution='uniform'),
         dict(type='Constant', layer='LayerNorm', val=1.0, bias=0.0)
